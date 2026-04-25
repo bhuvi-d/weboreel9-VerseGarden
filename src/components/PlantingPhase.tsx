@@ -117,21 +117,44 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
 
   useEffect(() => { if (timeLeft === 0) onComplete(flowers); }, [timeLeft, flowers, onComplete]);
 
-  const startListening = () => { 
-    console.log("Attempting to start listening...");
+  const startListening = async () => { 
+    console.log("Attempting to start listening (Permission First)...");
     setTranscript('');
+    setError(null);
+
     try { 
-      recognitionRef.current?.start(); 
-      setIsListening(true); 
-      setError(null); 
+      // Force browser permission prompt if not already granted
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Immediately stop the stream, we just needed the permission
+      stream.getTracks().forEach(track => track.stop());
+      
+      console.log("Microphone permission granted.");
+
+      if (!recognitionRef.current) {
+        setError("Speech recognition not initialized. Please refresh.");
+        return;
+      }
+
+      try {
+        recognitionRef.current.start(); 
+        setIsListening(true); 
+      } catch (e: any) {
+        if (e.name === 'InvalidStateError') {
+          // Already started or starting, ignore
+          console.log("Recognition already active.");
+          setIsListening(true);
+        } else {
+          throw e;
+        }
+      }
     } catch (e: any) {
-      console.error("Speech Start Error:", e);
-      if (e.name === 'NotAllowedError' || e.error === 'not-allowed') {
-        setError("Microphone access denied. Please enable it in browser settings.");
-      } else if (e.name === 'InvalidStateError') {
-        // Already started, ignore
+      console.error("Mic/Speech Start Error:", e);
+      if (e.name === 'NotAllowedError' || e.error === 'not-allowed' || e.name === 'PermissionDeniedError') {
+        setError("Microphone access denied. Please click the 'Lock' icon in your browser address bar and set Microphone to 'Allow'.");
+      } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+        setError("No microphone found. Please connect a mic and try again.");
       } else {
-        setError("Could not start listening. Please try again.");
+        setError("Could not start listening. Please ensure you are on a secure (HTTPS) connection.");
       }
       setIsListening(false);
     } 
