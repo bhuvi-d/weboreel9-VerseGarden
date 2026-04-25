@@ -46,119 +46,95 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   
   const { playChime } = useAudio();
   const recognitionRef = useRef<any>(null);
-  const handlerRef = useRef<(text: string) => void>(() => {});
 
-  // handleVoiceInput with latest state access
   const handleVoiceInput = useCallback((text: string) => {
     if (!text.trim()) return;
-    
     try {
       const newFlower = generateFlower(text);
       setFlowers(prev => [...prev, newFlower]);
-      
       const burstId = Date.now();
       setBursts(prev => [...prev, { id: burstId, x: newFlower.x, y: newFlower.y, color: '#c29470' }]);
-      setTimeout(() => {
-        setBursts(prev => prev.filter(b => b.id !== burstId));
-      }, 2000);
-
+      setTimeout(() => setBursts(prev => prev.filter(b => b.id !== burstId)), 2000);
       playChime();
       setTranscript('');
       setCurrentPromptIdx(prev => Math.min(prev + 1, AFFIRMATIONS.length));
-    } catch (e) {
-      console.error("Sow Error:", e);
-    }
+    } catch (e) {}
   }, [playChime]);
 
-  // Keep the ref updated for the speech handler closure
-  useEffect(() => {
-    handlerRef.current = handleVoiceInput;
-  }, [handleVoiceInput]);
-
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError("Voice capture not supported in this browser.");
+  // Unified Start/Stop with User Gesture
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      setSystemStatus("Stopped");
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("Voice not supported on this browser.");
+      return;
+    }
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setSystemStatus("Listening...");
-      setError(null);
-    };
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          const text = event.results[i][0].transcript.trim();
-          if (text) handlerRef.current(text);
-        } else {
-          interim += event.results[i][0].transcript;
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSystemStatus("Listening...");
+        setError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            handleVoiceInput(event.results[i][0].transcript.trim());
+          } else {
+            interim += event.results[i][0].transcript;
+          }
         }
-      }
-      setTranscript(interim);
-    };
+        setTranscript(interim);
+      };
 
-    recognition.onerror = (event: any) => {
-      console.error("Speech Error:", event.error);
-      setSystemStatus(`Error: ${event.error}`);
-      if (event.error === 'not-allowed') {
-        setError("Microphone access denied.");
-      }
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      if (isListening && timeLeft > 0) {
-        try { recognition.start(); } catch (e) {}
-      } else {
+      recognition.onerror = (event: any) => {
+        console.error("Speech Error:", event.error);
+        setSystemStatus(`Error: ${event.error}`);
+        if (event.error === 'not-allowed') setError("Microphone access denied.");
         setIsListening(false);
-        setSystemStatus("Idle");
-      }
-    };
+      };
 
-    recognitionRef.current = recognition;
+      recognition.onend = () => {
+        if (isListening) recognition.start(); // Auto-restart if we didn't explicitly stop
+      };
 
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (e: any) {
+      setError("Speech engine failed to start.");
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(timer); return 0; }
         return prev - 1;
       });
     }, 1000);
-
     return () => {
       clearInterval(timer);
-      try { recognition.stop(); } catch (e) {}
+      recognitionRef.current?.stop();
     };
   }, []);
 
   useEffect(() => {
     if (timeLeft === 0) onComplete(flowers);
   }, [timeLeft, flowers, onComplete]);
-
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-      } catch (e) {
-        console.error("Start failed:", e);
-      }
-    }
-  };
 
   return (
     <motion.div
@@ -184,12 +160,8 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       <div className="relative z-20 flex flex-col items-center justify-between min-h-screen p-8 pb-32">
         <div className="text-center w-full max-w-4xl space-y-12">
           <div className="space-y-2">
-            <div className="text-primary/40 tracking-[0.6em] uppercase text-[9px] font-bold">
-              The First Sowing
-            </div>
-            <div className="text-6xl font-serif font-bold text-foreground/20 italic">
-              {timeLeft}s
-            </div>
+            <div className="text-primary/40 tracking-[0.6em] uppercase text-[9px] font-bold">The First Sowing</div>
+            <div className="text-6xl font-serif font-bold text-foreground/20 italic">{timeLeft}s</div>
           </div>
 
           <div className="min-h-[160px]">
@@ -202,19 +174,13 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                   exit={{ opacity: 0, y: -20 }}
                   className="space-y-6"
                 >
-                  <p className="text-foreground/20 text-[10px] tracking-[0.5em] uppercase font-bold">Your Intent:</p>
-                  <h2 className="text-5xl md:text-7xl font-serif italic text-foreground/80 leading-tight">
-                    "{AFFIRMATIONS[currentPromptIdx]}"
-                  </h2>
+                  <p className="text-foreground/20 text-[10px] tracking-[0.5em] uppercase font-bold">Speak Clearly:</p>
+                  <h2 className="text-5xl md:text-7xl font-serif italic text-foreground/80 leading-tight">"{AFFIRMATIONS[currentPromptIdx]}"</h2>
                 </motion.div>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-primary/60 text-3xl font-serif italic"
-                >
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic text-center">
                   <Sparkles className="w-10 h-10 mx-auto mb-6 opacity-30" />
-                  Your sanctuary is flourishing...
+                  Your garden is alive...
                 </motion.div>
               )}
             </AnimatePresence>
@@ -232,17 +198,13 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && transcript.trim()) {
-                        handleVoiceInput(transcript);
-                      }
+                      if (e.key === 'Enter' && transcript.trim()) handleVoiceInput(transcript);
                     }}
-                    placeholder="Type or wait for voice..."
+                    placeholder="Type or click mic to speak..."
                     className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
                     autoFocus
                   />
-                  <p className="mt-4 text-[9px] text-foreground/20 tracking-[0.4em] uppercase font-bold">
-                    Press Enter to Sow
-                  </p>
+                  <p className="mt-4 text-[9px] text-foreground/20 tracking-[0.4em] uppercase font-bold">Press Enter to Sow</p>
                 </motion.div>
               ) : (
                 <motion.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-foreground/50 italic font-serif text-3xl md:text-4xl max-w-xl mx-auto">
@@ -263,11 +225,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                 }`}
               >
                 {isListening && (
-                  <motion.div 
-                    className="absolute inset-0 rounded-full border-2 border-primary"
-                    animate={{ scale: [1, 1.5], opacity: [1, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  />
+                  <motion.div className="absolute inset-0 rounded-full border-2 border-primary" animate={{ scale: [1, 1.5], opacity: [1, 0] }} transition={{ duration: 1.5, repeat: Infinity }} />
                 )}
                 {isListening ? <MicOff size={24} /> : <Mic size={24} />}
               </motion.button>
@@ -284,25 +242,15 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
               )}
             </div>
             
-            <p className="text-[10px] text-foreground/20 tracking-[0.5em] uppercase font-bold">
-              {isListening ? "Whisper into the light" : "Type or click mic to speak"}
-            </p>
-            <div className="text-[8px] text-primary/30 tracking-[0.3em] uppercase font-medium">
-              {error || `Status: ${systemStatus}`}
-            </div>
+            <p className="text-[10px] text-foreground/20 tracking-[0.5em] uppercase font-bold">{isListening ? "Whisper your words" : "Speak or Type"}</p>
+            <div className="text-[8px] text-primary/30 tracking-[0.3em] uppercase font-medium">{error || `Status: ${systemStatus}`}</div>
           </div>
         </div>
 
-        <div className="text-foreground/10 text-[9px] tracking-[0.8em] uppercase font-bold">
-          {flowers.length} seeds planted
-        </div>
+        <div className="text-foreground/10 text-[9px] tracking-[0.8em] uppercase font-bold">{flowers.length} seeds planted</div>
       </div>
 
-      <motion.div 
-        className="absolute bottom-0 left-0 h-[2px] bg-primary/20"
-        initial={{ width: "0%" }}
-        animate={{ width: `${(timeLeft / 45) * 100}%` }}
-      />
+      <motion.div className="absolute bottom-0 left-0 h-[2px] bg-primary/20" initial={{ width: "0%" }} animate={{ width: `${(timeLeft / 45) * 100}%` }} />
     </motion.div>
   );
 }
