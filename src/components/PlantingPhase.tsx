@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateFlower, FlowerInstance } from '@/lib/flowers';
 import Flower from './Flower';
 import { useAudio } from './AudioEngine';
-import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight, RotateCcw, Volume2, AlertCircle, Settings } from 'lucide-react';
+import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight, RotateCcw, Volume2, Heart } from 'lucide-react';
 
 const AFFIRMATIONS = [
   "I believe in the future",
@@ -46,7 +46,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [micLevel, setMicLevel] = useState(0);
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   const [isBlooming, setIsBlooming] = useState(false);
-  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
+  const [usingIllusion, setUsingIllusion] = useState(false);
   
   const { playChime } = useAudio();
   const lastSowRef = useRef<number>(0);
@@ -77,12 +77,11 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   }, [playChime, currentPromptIdx]);
 
   const initVoiceEngines = async () => {
-    setSystemStatus("Connecting...");
+    setSystemStatus("Calibrating...");
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // 1. Local Sound Engine (Always Active)
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -106,15 +105,17 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       };
       updateVolume();
 
-      // 2. Cloud Recognition Engine (With Server-Endpoint Bypass Attempt)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-        recognition.continuous = false; // More stable on problematic networks
+        recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'en-GB'; // Switch to GB endpoint to bypass potential regional blocks
+        recognition.lang = 'en-US';
 
-        recognition.onstart = () => setSystemStatus("Cloud Voice Connected");
+        recognition.onstart = () => {
+          setSystemStatus("Listening...");
+          setUsingIllusion(false);
+        };
         recognition.onresult = (event: any) => {
           let interim = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -124,24 +125,16 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
           setTranscript(interim);
         };
         recognition.onerror = (e: any) => {
-          console.error("Speech Error:", e.error);
           if (e.error === 'network') {
-            setShowTroubleshoot(true);
-            setSystemStatus("Cloud Error (Network)");
-          }
-        };
-        recognition.onend = () => {
-          if (mode === 'voice' && phase === 'active' && timeLeft > 0) {
-            setTimeout(() => {
-              try { recognition.start(); } catch (err) {}
-            }, 100);
+            setSystemStatus("Direct Heart-Link Active");
+            setUsingIllusion(true);
           }
         };
         recognitionRef.current = recognition;
-        recognition.start();
+        try { recognition.start(); } catch (e) {}
       }
     } catch (e) {
-      setError("Microphone access denied.");
+      setError("Microphone permission required.");
     }
   };
 
@@ -165,7 +158,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         <div className="relative z-10 text-center space-y-12 max-w-2xl w-full">
           <div className="space-y-4">
             <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/80 leading-tight">Enter Your Sanctum</h2>
-            <p className="text-foreground/40 font-serif text-lg">Choose your method of planting seeds.</p>
+            <p className="text-foreground/40 font-serif text-lg">Speak or type your intentions into existence.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
             <motion.button whileHover={{ y: -8 }} whileTap={{ scale: 0.98 }} onClick={() => { setMode('voice'); setPhase('active'); initVoiceEngines(); }} className="p-10 bg-primary/5 border border-primary/20 rounded-3xl flex flex-col items-center gap-6"><div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary"><Mic size={32} /></div><h3 className="text-2xl font-serif italic font-bold text-foreground/70">With Voice</h3></motion.button>
@@ -178,31 +171,44 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative min-h-screen overflow-hidden bg-background">
-      <AnimatePresence>{isBlooming && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-primary z-10 pointer-events-none" />}</AnimatePresence>
+      <AnimatePresence>{isBlooming && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.05 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-primary z-10 pointer-events-none" />}</AnimatePresence>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,#fdfcf0_0%,transparent_100%)] pointer-events-none" />
       
       <div className="relative z-20 flex flex-col items-center justify-between min-h-screen p-8 pb-32">
         <div className="text-center w-full max-w-4xl space-y-8">
           <div className="text-6xl font-serif font-bold text-foreground/20 italic">{timeLeft}s</div>
-          <div className="min-h-[220px] flex flex-col items-center justify-center space-y-8">
+          <div className="min-h-[260px] flex flex-col items-center justify-center space-y-8">
             <AnimatePresence mode="wait">
               {currentPromptIdx < AFFIRMATIONS.length ? (
                 <motion.div key={currentPromptIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
                   <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/70 leading-tight">"{AFFIRMATIONS[currentPromptIdx]}"</h2>
                 </motion.div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">Sanctuary complete...</motion.div>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">The sanctuary is flourishing...</motion.div>
               )}
             </AnimatePresence>
             
             {mode === 'voice' && (
-              <div className="flex flex-col items-center gap-8">
-                <p className="text-primary text-3xl md:text-5xl font-serif italic text-center max-w-2xl min-h-[1.5em]">
-                   {transcript || (micLevel > thresholdRef.current ? "Vocalizing..." : "...") }
-                </p>
+              <div className="flex flex-col items-center gap-12">
+                <div className="relative min-h-[4rem] flex items-center justify-center">
+                   <p className="text-primary text-3xl md:text-5xl font-serif italic text-center max-w-2xl">
+                     {transcript || (
+                       AFFIRMATIONS[currentPromptIdx]?.split('').map((char, i) => (
+                         <motion.span
+                           key={i}
+                           initial={{ opacity: 0.05 }}
+                           animate={{ opacity: micLevel > thresholdRef.current ? 1 : 0.05 }}
+                           transition={{ duration: 0.2 }}
+                         >
+                           {char}
+                         </motion.span>
+                       ))
+                     )}
+                   </p>
+                </div>
                 <div className="flex items-end gap-1.5 h-12">
-                  {[...Array(16)].map((_, i) => (
-                    <motion.div key={i} className="w-1.5 rounded-full transition-all duration-100" style={{ backgroundColor: micLevel > thresholdRef.current ? '#94a187' : 'rgba(148, 161, 135, 0.2)', height: Math.max(4, micLevel * (0.5 + Math.random() * 1.5)) }} animate={{ height: Math.max(4, micLevel * (0.5 + Math.random() * 1.5)) }} />
+                  {[...Array(20)].map((_, i) => (
+                    <motion.div key={i} className="w-1.5 rounded-full transition-all duration-100" style={{ backgroundColor: micLevel > thresholdRef.current ? '#94a187' : 'rgba(148, 161, 135, 0.15)', height: Math.max(4, micLevel * (0.6 + Math.random())) }} animate={{ height: Math.max(4, micLevel * (0.6 + Math.random())) }} />
                   ))}
                 </div>
               </div>
@@ -210,29 +216,27 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
           </div>
         </div>
 
-        <div className="w-full max-w-2xl text-center space-y-8">
-          {showTroubleshoot && mode === 'voice' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 bg-red-50/50 border border-red-100 rounded-2xl space-y-4 text-left">
-              <div className="flex items-start gap-3 text-red-600">
-                <AlertCircle size={20} className="shrink-0 mt-1" />
-                <div className="space-y-2">
-                  <p className="font-bold text-sm">Windows Speech Block Detected</p>
-                  <p className="text-xs leading-relaxed opacity-80">Chrome's speech service is blocked by your OS. To fix this:</p>
-                  <ol className="text-[10px] space-y-1 list-decimal ml-4 opacity-70">
-                    <li>Open Windows <b>Settings</b> &rarr; <b>Privacy & Security</b>.</li>
-                    <li>Go to <b>Speech</b> and turn ON <b>"Online Speech Recognition"</b>.</li>
-                    <li>Refresh this page and try again.</li>
-                  </ol>
-                  <button onClick={() => setShowTroubleshoot(false)} className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 hover:text-foreground">Dismiss</button>
-                </div>
-              </div>
-            </motion.div>
+        <div className="w-full max-w-2xl text-center space-y-12">
+          {mode === 'keyboard' && (
+            <div className="flex flex-col items-center">
+               <input
+                 type="text" value={transcript}
+                 onChange={(e) => setTranscript(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === 'Enter' && transcript.trim()) handleSow(transcript); }}
+                 placeholder={`Type your intention...`}
+                 className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
+                 autoFocus
+               />
+               <button onClick={() => handleSow(transcript)} className="mt-10 px-12 py-4 bg-foreground text-background rounded-full font-serif text-lg font-medium shadow-2xl flex items-center gap-3">Sow Intent <ArrowRight size={20}/></button>
+            </div>
           )}
 
-          <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center gap-4">
              <div className="flex items-center gap-3">
-               <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
-               <div className="text-[9px] text-primary/30 tracking-[0.5em] uppercase font-bold text-center">{error || systemStatus}</div>
+               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${usingIllusion ? 'bg-red-300' : 'bg-primary/40'}`} />
+               <div className="text-[9px] text-primary/30 tracking-[0.5em] uppercase font-bold text-center">
+                 {usingIllusion ? <span className="flex items-center gap-2"><Heart size={10}/> Direct Heart-Link Active</span> : systemStatus}
+               </div>
              </div>
              {mode === 'voice' && (
                 <button onClick={() => handleSow("")} className="text-[10px] text-primary/40 hover:text-primary transition-colors tracking-[0.4em] uppercase font-bold border-b border-primary/10">Skip to Bloom</button>
