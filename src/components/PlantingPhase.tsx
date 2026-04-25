@@ -238,55 +238,87 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
           </div>
         </div>
 
-        {/* Listening Status */}
+        {/* Input Area (Multi-modal: Voice or Typing) */}
         <div className="w-full max-w-2xl text-center space-y-12">
-          <div className="min-h-[100px] flex items-center justify-center">
+          <div className="min-h-[140px] flex flex-col items-center justify-center space-y-8">
             <AnimatePresence mode="wait">
-              <motion.p 
-                key={transcript}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-foreground/50 italic font-serif text-3xl md:text-4xl max-w-xl mx-auto"
-              >
-                {transcript || "Speak when you are ready..."}
-              </motion.p>
+              {!isListening ? (
+                <motion.div 
+                  key="typing"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full"
+                >
+                  <input
+                    type="text"
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && transcript.trim()) {
+                        handleVoiceInput(transcript);
+                      }
+                    }}
+                    placeholder="Type your affirmation here..."
+                    className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
+                    autoFocus
+                  />
+                  <p className="mt-4 text-[9px] text-foreground/20 tracking-[0.4em] uppercase font-bold">
+                    Press Enter to Sow
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.p 
+                  key="listening"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-foreground/50 italic font-serif text-3xl md:text-4xl max-w-xl mx-auto"
+                >
+                  {transcript || "Listening to your heart..."}
+                </motion.p>
+              )}
             </AnimatePresence>
           </div>
 
           <div className="flex flex-col items-center gap-8">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={isListening ? stopListening : startListening}
-              className={`w-28 h-28 rounded-full flex items-center justify-center transition-all shadow-2xl relative ${
-                isListening 
-                ? 'bg-primary/10 text-primary border border-primary/20' 
-                : 'bg-foreground text-background'
-              }`}
-            >
-              {isListening && (
-                <motion.div 
-                  className="absolute inset-0 rounded-full border-2 border-primary"
-                  animate={{ scale: [1, 1.5], opacity: [1, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-              )}
-              {isListening ? <MicOff size={40} /> : <Mic size={40} />}
-            </motion.button>
-            <div className="space-y-4">
-              <p className="text-[10px] text-foreground/20 tracking-[0.6em] uppercase font-bold">
-                {isListening ? "Listening Active" : "Begin Speaking"}
-              </p>
-              
+            <div className="flex items-center gap-10">
+              {/* Voice Toggle */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={isListening ? stopListening : startListening}
+                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-xl relative ${
+                  isListening 
+                  ? 'bg-primary text-background' 
+                  : 'bg-primary/10 text-primary border border-primary/20'
+                }`}
+                title="Sow with Voice"
+              >
+                {isListening && (
+                  <motion.div 
+                    className="absolute inset-0 rounded-full border-2 border-primary"
+                    animate={{ scale: [1, 1.5], opacity: [1, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                )}
+                {isListening ? <MicOff size={24} /> : <Mic size={24} />}
+              </motion.button>
+
+              {/* Manual Sow Button */}
               {!isListening && (
-                <button 
-                  onClick={() => handleVoiceInput(AFFIRMATIONS[currentPromptIdx] || "Grown from heart")}
-                  className="text-[9px] text-primary/40 hover:text-primary transition-colors tracking-[0.3em] uppercase font-medium block mx-auto border-b border-primary/10"
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => transcript.trim() && handleVoiceInput(transcript)}
+                  className="px-10 py-4 bg-foreground text-background rounded-full font-serif text-lg font-medium shadow-xl"
                 >
-                  Prefer to type / manual sow?
-                </button>
+                  Sow Intent
+                </motion.button>
               )}
             </div>
+            
+            <p className="text-[10px] text-foreground/20 tracking-[0.5em] uppercase font-bold">
+              {isListening ? "Whisper your words" : "Type or speak your intent"}
+            </p>
           </div>
         </div>
 
