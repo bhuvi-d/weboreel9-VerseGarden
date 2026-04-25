@@ -239,11 +239,22 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                   <p className="mt-4 text-[9px] text-foreground/20 tracking-[0.4em] uppercase font-bold">Press Enter to Settle</p>
                 </motion.div>
               ) : (
-                <motion.div key="active-voice" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-4">
-                  <p className="text-foreground/50 italic font-serif text-3xl md:text-4xl">Listening to your heart...</p>
+                <motion.div key="active-voice" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-6">
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-foreground/30 italic font-serif text-2xl md:text-3xl min-h-[1.5em] text-center max-w-lg">
+                      {transcript || "Speak your intent..."}
+                    </p>
+                    {transcript && (
+                      <motion.div 
+                        initial={{ scaleX: 0 }} 
+                        animate={{ scaleX: 1 }} 
+                        className="h-[1px] bg-primary/20 w-24"
+                      />
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     {[1, 2, 3].map(i => (
-                      <motion.div key={i} className="w-1 h-12 bg-primary/40 rounded-full" animate={{ scaleY: [1, 1.8, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} />
+                      <motion.div key={i} className="w-1.5 h-12 bg-primary/40 rounded-full" animate={{ scaleY: [1, 2, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} />
                     ))}
                   </div>
                 </motion.div>

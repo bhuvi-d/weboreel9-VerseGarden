@@ -14,13 +14,13 @@ export interface FlowerInstance {
 }
 
 export const FLOWER_THEME: Record<FlowerType, { color: string; secondary: string; species: FlowerSpecies }> = {
-  hope: { color: '#94a187', secondary: '#fdfaf6', species: 'lily' },      // Moss/Linen
-  love: { color: '#d99a9a', secondary: '#fff5f5', species: 'rose' },      // Muted Coral
-  peace: { color: '#c88d67', secondary: '#fdfaf6', species: 'wildflower' }, // Burnt Sienna/Linen
-  dream: { color: '#e6ba8c', secondary: '#fffbf0', species: 'sunflower' },  // Soft Gold
-  gratitude: { color: '#a5a58d', secondary: '#f5f5f0', species: 'lavender' }, // Olive Drab
-  courage: { color: '#8d7b68', secondary: '#f4ede6', species: 'tulip' },    // Bark/Sand
-  default: { color: '#b5a190', secondary: '#f8f4f1', species: 'daisy' }     // Muted Taupe
+  hope: { color: '#94a187', secondary: '#e8eedf', species: 'lily' },      // Sage/Linen
+  love: { color: '#c88d67', secondary: '#fdf3e7', species: 'rose' },      // Burnt Sienna/Peach
+  peace: { color: '#8d7b68', secondary: '#f4ede6', species: 'wildflower' }, // Warm Clay/Sand
+  dream: { color: '#9a8da4', secondary: '#f3eef7', species: 'sunflower' },  // Dusty Lavender
+  gratitude: { color: '#a5a58d', secondary: '#f0f0e8', species: 'lavender' }, // Olive Drab
+  courage: { color: '#847e89', secondary: '#efecf0', species: 'tulip' },    // Muted Plum
+  default: { color: '#b5a190', secondary: '#f8f4f1', species: 'daisy' }     // Warm Taupe
 };
 
 export function getFlowerType(text: string): FlowerType {
