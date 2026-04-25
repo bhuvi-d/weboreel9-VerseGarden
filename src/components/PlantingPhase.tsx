@@ -80,7 +80,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.lang = navigator.language || 'en-US';
 
       recognition.onstart = () => {
         setIsListening(true);
@@ -105,18 +105,30 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         setSystemStatus(`Error: ${event.error}`);
         
         if (event.error === 'network') {
-          setError("Speech service unreachable. Please type your intent below.");
-          setSystemStatus("Network Error (Switching to Keyboard)");
+          setError("Connection to voice service failed. Please try switching to a different network or just use the keyboard below.");
+          setSystemStatus("Network Error");
         } else if (event.error === 'not-allowed') {
           setError("Microphone access denied.");
+        } else if (event.error === 'no-speech') {
+          setSystemStatus("No speech detected.");
         } else {
-          setError(`Voice Issue: ${event.error}. Feel free to type!`);
+          setError(`Voice Issue: ${event.error}`);
         }
         setIsListening(false);
       };
 
       recognition.onend = () => {
-        if (isListening) recognition.start(); // Auto-restart if we didn't explicitly stop
+        // Only restart if we are listening and there was no fatal error
+        if (isListening && !error && timeLeft > 0) {
+          try {
+            recognition.start();
+          } catch (e) {
+            setIsListening(false);
+          }
+        } else {
+          setIsListening(false);
+          setSystemStatus("Idle");
+        }
       };
 
       recognitionRef.current = recognition;
