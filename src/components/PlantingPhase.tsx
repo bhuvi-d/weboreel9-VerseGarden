@@ -41,6 +41,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [transcript, setTranscript] = useState('');
   const [currentPromptIdx, setCurrentPromptIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [systemStatus, setSystemStatus] = useState<string>('Ready');
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   
   const { playChime } = useAudio();
@@ -54,23 +55,22 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false; // Often more reliable across browsers
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
-      console.log("Speech Recognition: Started");
+      console.log("Speech: Listening started");
       setIsListening(true);
       setError(null);
+      setSystemStatus("Listening...");
     };
 
     recognition.onresult = (event: any) => {
-      console.log("Speech Recognition: Result received");
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           const text = event.results[i][0].transcript.trim();
-          console.log("Speech Recognition: Final text:", text);
           if (text) handleVoiceInput(text);
         } else {
           interim += event.results[i][0].transcript;
@@ -80,25 +80,33 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech Recognition Error:", event.error);
-      if (event.error === 'not-allowed') {
-        setError("Microphone access denied. Please enable it in browser settings.");
-      } else if (event.error === 'network') {
-        setError("Network error. Please check your connection.");
+      console.error("Speech Error:", event.error);
+      const errMap: Record<string, string> = {
+        'not-allowed': "Microphone access blocked. Check browser settings.",
+        'no-speech': "No voice detected. Please speak louder.",
+        'network': "Network issues. Check connection.",
+        'service-not-allowed': "Speech service not allowed by browser.",
+        'aborted': "Listening stopped."
+      };
+      setSystemStatus(`Error: ${event.error}`);
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        setError(errMap[event.error] || `Mic Error: ${event.error}`);
       }
       setIsListening(false);
     };
 
     recognition.onend = () => {
-      console.log("Speech Recognition: Ended");
-      // Only restart if we are still supposed to be listening and no error
+      console.log("Speech: Ended");
       if (isListening && timeLeft > 0) {
-        console.log("Speech Recognition: Restarting...");
+        setSystemStatus("Restarting...");
         try {
           recognition.start();
         } catch (e) {
-          console.error("Speech Recognition: Restart failed", e);
+          setIsListening(false);
         }
+      } else {
+        setSystemStatus("Idle");
+        setIsListening(false);
       }
     };
 
@@ -121,14 +129,13 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     console.log("Attempting to start listening (Permission First)...");
     setTranscript('');
     setError(null);
+    setSystemStatus("Requesting Permission...");
 
     try { 
-      // Force browser permission prompt if not already granted
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Immediately stop the stream, we just needed the permission
       stream.getTracks().forEach(track => track.stop());
       
-      console.log("Microphone permission granted.");
+      setSystemStatus("Permission Granted. Starting...");
 
       if (!recognitionRef.current) {
         setError("Speech recognition not initialized. Please refresh.");
@@ -140,8 +147,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         setIsListening(true); 
       } catch (e: any) {
         if (e.name === 'InvalidStateError') {
-          // Already started or starting, ignore
-          console.log("Recognition already active.");
+          setSystemStatus("Already Listening.");
           setIsListening(true);
         } else {
           throw e;
@@ -149,6 +155,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       }
     } catch (e: any) {
       console.error("Mic/Speech Start Error:", e);
+      setSystemStatus(`Failed: ${e.name}`);
       if (e.name === 'NotAllowedError' || e.error === 'not-allowed' || e.name === 'PermissionDeniedError') {
         setError("Microphone access denied. Please click the 'Lock' icon in your browser address bar and set Microphone to 'Allow'.");
       } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
@@ -319,6 +326,9 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
             <p className="text-[10px] text-foreground/20 tracking-[0.5em] uppercase font-bold">
               {isListening ? "Whisper your words" : "Type or speak your intent"}
             </p>
+            <div className="text-[8px] text-primary/30 tracking-[0.3em] uppercase font-medium">
+              System: {systemStatus}
+            </div>
           </div>
         </div>
 
