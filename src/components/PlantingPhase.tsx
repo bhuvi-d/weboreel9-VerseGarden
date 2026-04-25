@@ -92,9 +92,9 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         const level = sum / dataArray.length;
         setMicLevel(level);
 
-        // If loud noise detected, and we haven't sowed recently
-        if (level > 35 && Date.now() - lastSowRef.current > 3000) {
-          handleSow(""); // Local engine uses prompt text
+        // If noise detected, and we haven't sowed recently
+        if (level > 20 && Date.now() - lastSowRef.current > 3000) {
+          handleSow(""); 
         }
         requestAnimationFrame(updateVolume);
       };
@@ -222,7 +222,15 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                 {/* Visual Audio Bars - PROOF of mic activity */}
                 <div className="flex items-end gap-1.5 h-12">
                   {[...Array(16)].map((_, i) => (
-                    <motion.div key={i} className="w-1.5 bg-primary/40 rounded-full" animate={{ height: Math.max(4, micLevel * (0.5 + Math.random() * 1.5)) }} />
+                    <motion.div 
+                      key={i} 
+                      className="w-1.5 rounded-full transition-colors duration-200"
+                      style={{ 
+                        backgroundColor: micLevel > 20 ? '#94a187' : 'rgba(148, 161, 135, 0.3)',
+                        height: Math.max(4, micLevel * (0.5 + Math.random() * 1.5)) 
+                      }}
+                      animate={{ height: Math.max(4, micLevel * (0.5 + Math.random() * 1.5)) }}
+                    />
                   ))}
                 </div>
               </div>
