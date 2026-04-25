@@ -54,15 +54,23 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false; // Often more reliable across browsers
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
+    recognition.onstart = () => {
+      console.log("Speech Recognition: Started");
+      setIsListening(true);
+      setError(null);
+    };
+
     recognition.onresult = (event: any) => {
+      console.log("Speech Recognition: Result received");
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           const text = event.results[i][0].transcript.trim();
+          console.log("Speech Recognition: Final text:", text);
           if (text) handleVoiceInput(text);
         } else {
           interim += event.results[i][0].transcript;
@@ -71,8 +79,29 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       setTranscript(interim);
     };
 
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => { if (isListening && timeLeft > 0) recognition.start(); };
+    recognition.onerror = (event: any) => {
+      console.error("Speech Recognition Error:", event.error);
+      if (event.error === 'not-allowed') {
+        setError("Microphone access denied. Please enable it in browser settings.");
+      } else if (event.error === 'network') {
+        setError("Network error. Please check your connection.");
+      }
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      console.log("Speech Recognition: Ended");
+      // Only restart if we are still supposed to be listening and no error
+      if (isListening && timeLeft > 0) {
+        console.log("Speech Recognition: Restarting...");
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error("Speech Recognition: Restart failed", e);
+        }
+      }
+    };
+
     recognitionRef.current = recognition;
     // startListening(); // Removed: Browser requires user gesture for microphone access
 
@@ -89,14 +118,18 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   useEffect(() => { if (timeLeft === 0) onComplete(flowers); }, [timeLeft, flowers, onComplete]);
 
   const startListening = () => { 
+    console.log("Attempting to start listening...");
+    setTranscript('');
     try { 
       recognitionRef.current?.start(); 
       setIsListening(true); 
       setError(null); 
     } catch (e: any) {
       console.error("Speech Start Error:", e);
-      if (e.name === 'NotAllowedError') {
+      if (e.name === 'NotAllowedError' || e.error === 'not-allowed') {
         setError("Microphone access denied. Please enable it in browser settings.");
+      } else if (e.name === 'InvalidStateError') {
+        // Already started, ignore
       } else {
         setError("Could not start listening. Please try again.");
       }
@@ -217,9 +250,20 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
               )}
               {isListening ? <MicOff size={40} /> : <Mic size={40} />}
             </motion.button>
-            <p className="text-[10px] text-foreground/20 tracking-[0.6em] uppercase font-bold">
-              {isListening ? "Listening Active" : "Begin Speaking"}
-            </p>
+            <div className="space-y-4">
+              <p className="text-[10px] text-foreground/20 tracking-[0.6em] uppercase font-bold">
+                {isListening ? "Listening Active" : "Begin Speaking"}
+              </p>
+              
+              {!isListening && (
+                <button 
+                  onClick={() => handleVoiceInput(AFFIRMATIONS[currentPromptIdx] || "Grown from heart")}
+                  className="text-[9px] text-primary/40 hover:text-primary transition-colors tracking-[0.3em] uppercase font-medium block mx-auto border-b border-primary/10"
+                >
+                  Prefer to type / manual sow?
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
