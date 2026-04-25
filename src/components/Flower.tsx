@@ -113,15 +113,18 @@ export default function Flower({ data }: { data: FlowerInstance }) {
           <SpeciesSVG species={data.species} color={color} secondary={secondary} />
         </svg>
         
-        {/* Label */}
+        {/* Label — shows actual spoken words */}
         <motion.div 
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: data.delay + 0.7 }}
-          className="mt-1 text-center"
+          className="mt-1 text-center max-w-[120px]"
         >
-          <span className="text-[9px] font-serif italic tracking-[0.25em] uppercase whitespace-nowrap" style={{ color }}>
-            {data.text}
+          <span 
+            className="text-[8px] font-serif italic leading-tight block whitespace-normal text-center"
+            style={{ color }}
+          >
+            "{data.text.length > 30 ? data.text.slice(0, 30) + '…' : data.text}"
           </span>
         </motion.div>
       </div>

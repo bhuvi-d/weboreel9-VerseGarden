@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateFlower, FlowerInstance } from '@/lib/flowers';
 import Flower from './Flower';
 import { useAudio } from './AudioEngine';
-import { Mic, Keyboard, Leaf, ArrowRight } from 'lucide-react';
+import { Mic, Keyboard, Leaf, ArrowRight, MicOff } from 'lucide-react';
 
 const AFFIRMATIONS = [
   "I believe in the future",
@@ -33,37 +33,28 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [mode, setMode] = useState<'voice' | 'keyboard'>('keyboard');
   const [timeLeft, setTimeLeft] = useState(45);
   const [flowers, setFlowers] = useState<FlowerInstance[]>([]);
-  const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [currentPromptIdx, setCurrentPromptIdx] = useState(0);
   const [isBlooming, setIsBlooming] = useState(false);
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
-  // Local fallback for localhost / blocked environments
-  const [micLevel, setMicLevel] = useState(0);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [voiceBlocked, setVoiceBlocked] = useState(false);
 
   const { playChime } = useAudio();
 
   const lastSowRef = useRef<number>(0);
   const recognitionRef = useRef<any>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isSpeakingRef = useRef(false);
-  const currentPromptIdxRef = useRef(0);
   const playChimeRef = useRef(playChime);
-
-  useEffect(() => { currentPromptIdxRef.current = currentPromptIdx; }, [currentPromptIdx]);
   useEffect(() => { playChimeRef.current = playChime; }, [playChime]);
 
-  const sowFlower = useCallback((text?: string) => {
+  // Sow ONLY from actual spoken text — no random fallback
+  const sowFlower = useCallback((spokenText: string) => {
     const now = Date.now();
     if (now - lastSowRef.current < 1500) return;
+    if (!spokenText.trim()) return; // never sow empty/random
     lastSowRef.current = now;
 
-    const idx = currentPromptIdxRef.current;
-    const word = (text || '').trim() || AFFIRMATIONS[idx] || 'hope';
-    const newFlower = generateFlower(word);
+    const newFlower = generateFlower(spokenText.trim());
 
     setFlowers(prev => [...prev, newFlower]);
     setBursts(prev => [...prev, { id: now, x: newFlower.x, y: newFlower.y, color: '#c29470' }]);
@@ -71,66 +62,19 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     setIsBlooming(true);
     setTimeout(() => setIsBlooming(false), 800);
     playChimeRef.current();
-    setTranscript('');
+    setInterimTranscript('');
     setCurrentPromptIdx(prev => Math.min(prev + 1, AFFIRMATIONS.length));
   }, []);
 
-  // Local volume fallback when cloud STT is blocked (localhost)
-  const startLocalFallback = async () => {
-    setUsingFallback(true);
-    setStatusMsg('Local Voice Mode (speak → pause → bloom)');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
-      source.connect(analyser);
-      audioCtxRef.current = audioCtx;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let noiseSum = 0, noiseSamples = 0;
-
-      const loop = () => {
-        if (!audioCtxRef.current) return;
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const level = sum / dataArray.length;
-        setMicLevel(level);
-
-        if (noiseSamples < 50) { noiseSum += level; noiseSamples++; }
-        else {
-          const threshold = (noiseSum / noiseSamples) + 10;
-          const speaking = level > threshold;
-          setIsSpeaking(speaking);
-
-          if (speaking && !isSpeakingRef.current) {
-            isSpeakingRef.current = true;
-            if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
-            setTranscript(AFFIRMATIONS[currentPromptIdxRef.current] || '');
-          }
-          if (!speaking && isSpeakingRef.current) {
-            isSpeakingRef.current = false;
-            speakingTimerRef.current = setTimeout(() => { sowFlower(); }, 600);
-          }
-        }
-        requestAnimationFrame(loop);
-      };
-      loop();
-    } catch { setStatusMsg('Mic access denied'); }
-  };
-
-  // Primary: Cloud Speech Recognition (works on HTTPS / Vercel)
+  // Cloud Speech Recognition ONLY — this is what runs on Vercel (HTTPS)
   const startVoiceMode = () => {
     setMode('voice');
     setPhase('active');
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      startLocalFallback();
+      setVoiceBlocked(true);
+      setStatusMsg('Speech not supported in this browser. Use Chrome.');
       return;
     }
 
@@ -139,27 +83,40 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => setStatusMsg('Listening...');
+    recognition.onstart = () => {
+      setStatusMsg('Listening — speak your affirmation...');
+      setVoiceBlocked(false);
+    };
+
     recognition.onresult = (event: any) => {
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) sowFlower(event.results[i][0].transcript);
-        else interim += event.results[i][0].transcript;
+        const result = event.results[i];
+        if (result.isFinal) {
+          // Sow a flower with EXACTLY what was spoken
+          sowFlower(result[0].transcript);
+        } else {
+          interim += result[0].transcript;
+        }
       }
-      setTranscript(interim);
+      setInterimTranscript(interim);
     };
+
     recognition.onerror = (e: any) => {
       if (e.error === 'network') {
-        // Cloud blocked (usually localhost) — silently switch to local fallback
-        recognition.stop();
-        startLocalFallback();
+        setVoiceBlocked(true);
+        setStatusMsg('Speech blocked on localhost. Will work on Vercel (HTTPS). Use Manual Bloom below.');
+      } else if (e.error === 'not-allowed') {
+        setVoiceBlocked(true);
+        setStatusMsg('Microphone access denied. Please allow mic and try again.');
       } else {
-        setStatusMsg(`Voice error: ${e.error}`);
+        setStatusMsg(`Error: ${e.error}`);
       }
     };
+
     recognition.onend = () => {
-      // Auto-restart unless we switched to fallback
-      if (!usingFallback) {
+      // Restart unless blocked
+      if (!voiceBlocked) {
         try { recognition.start(); } catch {}
       }
     };
@@ -174,9 +131,6 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       return () => {
         clearInterval(timer);
         recognitionRef.current?.stop();
-        if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
-        audioCtxRef.current?.close();
-        audioCtxRef.current = null;
       };
     }
   }, [phase]);
@@ -200,7 +154,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
               <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary"><Mic size={32} /></div>
               <div className="space-y-2">
                 <h3 className="text-2xl font-serif italic font-bold text-foreground/70">With Voice</h3>
-                <p className="text-[10px] text-foreground/30 tracking-widest uppercase">Speak — Garden Blooms</p>
+                <p className="text-[10px] text-foreground/30 tracking-widest uppercase">Speak → Flower Blooms</p>
               </div>
             </motion.button>
             <motion.button whileHover={{ y: -8 }} whileTap={{ scale: 0.98 }} onClick={() => { setMode('keyboard'); setPhase('active'); }}
@@ -237,27 +191,30 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
           <div className="min-h-[300px] flex flex-col items-center justify-center space-y-8">
             <AnimatePresence mode="wait">
               {currentPromptIdx < AFFIRMATIONS.length ? (
-                <motion.div key={currentPromptIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                <motion.div key={currentPromptIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6 text-center">
                   <p className="text-foreground/20 text-[10px] tracking-[0.5em] uppercase font-bold">
                     {mode === 'voice' ? 'Speak clearly:' : 'Type your intention:'}
                   </p>
                   <h2 className="text-4xl md:text-6xl font-serif italic leading-tight text-foreground/70">
                     "{AFFIRMATIONS[currentPromptIdx]}"
                   </h2>
-                  {/* Live transcript — real words on Vercel, affirmation echo on localhost */}
+
                   {mode === 'voice' && (
                     <AnimatePresence mode="wait">
-                      {transcript ? (
-                        <motion.p key="transcript" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          className="text-primary text-2xl font-serif italic">
-                          🎙 "{transcript}"
+                      {interimTranscript ? (
+                        <motion.p key="interim" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                          className="text-primary text-2xl md:text-3xl font-serif italic px-4">
+                          🎙 "{interimTranscript}"
+                        </motion.p>
+                      ) : voiceBlocked ? (
+                        <motion.p key="blocked" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                          className="text-amber-500/70 text-xs font-mono max-w-sm leading-relaxed">
+                          {statusMsg}
                         </motion.p>
                       ) : (
                         <motion.p key="hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                           className="text-primary/40 text-sm font-serif italic">
-                          {usingFallback
-                            ? (isSpeaking ? '🌱 Voice detected — releasing seed...' : 'Speak, then pause to bloom.')
-                            : 'Speak and your words will appear here...'}
+                          {statusMsg || 'Say the words above...'}
                         </motion.p>
                       )}
                     </AnimatePresence>
@@ -269,44 +226,36 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                 </motion.div>
               )}
             </AnimatePresence>
-
-            {mode === 'voice' && usingFallback && (
-              <div className="flex items-end gap-1 h-12 px-4">
-                {[...Array(28)].map((_, i) => (
-                  <motion.div key={i} className="w-1.5 rounded-full"
-                    style={{ backgroundColor: isSpeaking ? '#94a187' : 'rgba(148,161,135,0.2)' }}
-                    animate={{ height: Math.max(4, micLevel * (0.5 + Math.abs(Math.sin(i * 0.8)))) }}
-                    transition={{ duration: 0.08 }} />
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
         <div className="w-full max-w-2xl text-center space-y-8">
           {mode === 'keyboard' ? (
             <div className="flex flex-col items-center">
-              <input type="text" value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && transcript.trim()) sowFlower(transcript); }}
+              <input type="text" value={interimTranscript}
+                onChange={(e) => setInterimTranscript(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && interimTranscript.trim()) sowFlower(interimTranscript); }}
                 placeholder="Type your intention..."
                 className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
                 autoFocus />
-              <button onClick={() => sowFlower(transcript)}
+              <button onClick={() => sowFlower(interimTranscript)}
                 className="mt-10 px-12 py-4 bg-foreground text-background rounded-full font-serif text-lg font-medium shadow-2xl flex items-center gap-3">
                 Sow Seed <ArrowRight size={20} />
               </button>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-4">
-              <button onClick={() => sowFlower()}
-                className="px-10 py-3 border border-primary/20 text-primary/50 rounded-full font-serif hover:bg-primary/5 transition-all text-sm">
-                Manual Bloom ↓
-              </button>
+              {/* Manual bloom only shows if voice is blocked */}
+              {voiceBlocked && (
+                <button onClick={() => sowFlower(AFFIRMATIONS[currentPromptIdx])}
+                  className="flex items-center gap-2 px-8 py-3 border border-primary/20 text-primary/60 rounded-full font-serif hover:bg-primary/5 transition-all text-sm">
+                  <MicOff size={14} /> Bloom without voice
+                </button>
+              )}
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${voiceBlocked ? 'bg-amber-400' : 'bg-primary/40'}`} />
                 <span className="text-[9px] text-primary/30 tracking-[0.4em] uppercase font-bold">
-                  {statusMsg || 'Connecting...'}
+                  {voiceBlocked ? 'Voice blocked · localhost only issue' : (statusMsg || 'initializing...')}
                 </span>
               </div>
             </div>
