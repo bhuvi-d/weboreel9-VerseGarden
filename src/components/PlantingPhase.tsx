@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateFlower, FlowerInstance } from '@/lib/flowers';
 import Flower from './Flower';
 import { useAudio } from './AudioEngine';
-import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight, Heart } from 'lucide-react';
+import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight } from 'lucide-react';
 
 const AFFIRMATIONS = [
   "I believe in the future",
@@ -42,19 +42,16 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [transcript, setTranscript] = useState('');
   const [currentPromptIdx, setCurrentPromptIdx] = useState(0);
   const [systemStatus, setSystemStatus] = useState<string>('Ready');
-  const [micLevel, setMicLevel] = useState(0);
-  const [isHeartSync, setIsHeartSync] = useState(false);
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   const [isBlooming, setIsBlooming] = useState(false);
   
   const { playChime } = useAudio();
   const lastSowRef = useRef<number>(0);
   const recognitionRef = useRef<any>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
 
   const handleSow = useCallback((text: string) => {
     const now = Date.now();
-    if (now - lastSowRef.current < 1500) return; 
+    if (now - lastSowRef.current < 1200) return; 
     lastSowRef.current = now;
 
     const finalWord = text.trim() || AFFIRMATIONS[currentPromptIdx];
@@ -74,72 +71,51 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     } catch (e) {}
   }, [playChime, currentPromptIdx]);
 
-  // The "Heart-Sync" Local Audio Detection (Fail-safe for network errors)
-  const initHeartSync = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      audioCtxRef.current = audioCtx;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const updateVolume = () => {
-        if (!audioCtxRef.current) return;
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        setMicLevel(sum / dataArray.length);
-        requestAnimationFrame(updateVolume);
-      };
-      updateVolume();
-    } catch (e) {}
-  };
-
-  const startVoiceMode = async () => {
+  // THE ULTIMATE MINIMALIST VOICE START
+  const startVoiceMode = () => {
     setMode('voice');
     setPhase('active');
-    setSystemStatus("Connecting...");
+    setSystemStatus("Starting Voice...");
 
-    // 1. Always start local mic for visualization and Heart-Sync illusion
-    await initHeartSync();
-
-    // 2. Attempt Cloud Recognition
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setSystemStatus("Cloud Voice Active");
-        setIsHeartSync(false);
-      };
-
-      recognition.onresult = (event: any) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) handleSow(event.results[i][0].transcript);
-          else interim += event.results[i][0].transcript;
-        }
-        setTranscript(interim);
-      };
-
-      recognition.onerror = (e: any) => {
-        if (e.error === 'network') {
-          setSystemStatus("Heart-Sync Active");
-          setIsHeartSync(true); // Switch to the "illusion" mode
-        }
-      };
-
-      recognitionRef.current = recognition;
-      try { recognition.start(); } catch (err) {}
-    } else {
-      setIsHeartSync(true);
+    if (!SpeechRecognition) {
+      setSystemStatus("Not Supported");
+      return;
     }
+
+    // Single initialization, no extra stream requests
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setSystemStatus("Listening...");
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          handleSow(event.results[i][0].transcript);
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      setTranscript(interim);
+    };
+
+    recognition.onerror = (e: any) => {
+      console.error("Speech Error:", e.error);
+      setSystemStatus(`Error: ${e.error}`);
+    };
+
+    recognition.onend = () => {
+      if (mode === 'voice' && phase === 'active') {
+         try { recognition.start(); } catch (err) {}
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   useEffect(() => {
@@ -148,7 +124,6 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       return () => {
         clearInterval(timer);
         recognitionRef.current?.stop();
-        audioCtxRef.current?.close();
       };
     }
   }, [phase]);
@@ -161,7 +136,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,#fdfcf0_0%,transparent_100%)] pointer-events-none" />
         <div className="relative z-10 text-center space-y-12 max-w-2xl w-full">
           <div className="space-y-4">
-            <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/80 leading-tight">Enter Your Sanctum</h2>
+            <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/80 leading-tight">Your Digital Sanctuary</h2>
             <p className="text-foreground/40 font-serif text-lg">Choose your method of planting seeds.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
@@ -195,38 +170,19 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
             <AnimatePresence mode="wait">
               {currentPromptIdx < AFFIRMATIONS.length ? (
                 <motion.div key={currentPromptIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                  <p className="text-foreground/20 text-[10px] tracking-[0.5em] uppercase font-bold">Say Clearly:</p>
                   <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/70 leading-tight">"{AFFIRMATIONS[currentPromptIdx]}"</h2>
                 </motion.div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">The garden has taken root...</motion.div>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">Sanctuary thriving...</motion.div>
               )}
             </AnimatePresence>
             
             {mode === 'voice' && (
               <div className="flex flex-col items-center gap-12">
-                <div className="relative min-h-[4rem] flex items-center justify-center">
-                   <p className="text-primary text-3xl md:text-5xl font-serif italic text-center max-w-2xl">
-                     {isHeartSync ? (
-                       AFFIRMATIONS[currentPromptIdx]?.split('').map((char, i) => (
-                         <motion.span
-                           key={i}
-                           initial={{ opacity: 0.05 }}
-                           animate={{ opacity: micLevel > 15 ? 1 : 0.05 }}
-                           transition={{ duration: 0.2 }}
-                         >
-                           {char}
-                         </motion.span>
-                       ))
-                     ) : (
-                       transcript || "..."
-                     )}
-                   </p>
-                </div>
-                <div className="flex items-end gap-1.5 h-12">
-                  {[...Array(20)].map((_, i) => (
-                    <motion.div key={i} className="w-1.5 rounded-full transition-all duration-100" style={{ backgroundColor: micLevel > 15 ? '#94a187' : 'rgba(148, 161, 135, 0.15)', height: Math.max(4, micLevel * (0.6 + Math.random())) }} animate={{ height: Math.max(4, micLevel * (0.6 + Math.random())) }} />
-                  ))}
-                </div>
+                 <p className="text-primary text-3xl md:text-5xl font-serif italic text-center max-w-2xl min-h-[1.2em]">
+                   {transcript || "..."}
+                 </p>
               </div>
             )}
           </div>
@@ -239,7 +195,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                  type="text" value={transcript}
                  onChange={(e) => setTranscript(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter' && transcript.trim()) handleSow(transcript); }}
-                 placeholder={`Type your intention...`}
+                 placeholder={`Type intention...`}
                  className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
                  autoFocus
                />
@@ -247,13 +203,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
             </div>
           ) : (
             <div className="flex flex-col items-center gap-6">
-              <button 
-                onClick={() => handleSow(transcript || AFFIRMATIONS[currentPromptIdx])} 
-                className="px-10 py-4 border-2 border-primary/20 text-primary/60 rounded-full font-serif text-lg hover:bg-primary/5 transition-all shadow-lg flex items-center gap-2"
-              >
-                {isHeartSync ? <Heart size={18} className="text-primary"/> : <Mic size={18}/>}
-                {isHeartSync ? "Confirm Heart-Sync" : "Manual Sow Fallback"}
-              </button>
+              <button onClick={() => handleSow(transcript || AFFIRMATIONS[currentPromptIdx])} className="px-10 py-4 border-2 border-primary/20 text-primary/60 rounded-full font-serif text-lg hover:bg-primary/5 transition-all shadow-lg">Manual Sow Fallback</button>
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
                 <div className="text-[9px] text-primary/30 tracking-[0.5em] uppercase font-bold">{systemStatus}</div>
