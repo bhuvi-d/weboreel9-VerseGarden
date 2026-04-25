@@ -103,7 +103,15 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
       recognition.onerror = (event: any) => {
         console.error("Speech Error:", event.error);
         setSystemStatus(`Error: ${event.error}`);
-        if (event.error === 'not-allowed') setError("Microphone access denied.");
+        
+        if (event.error === 'network') {
+          setError("Speech service unreachable. Please type your intent below.");
+          setSystemStatus("Network Error (Switching to Keyboard)");
+        } else if (event.error === 'not-allowed') {
+          setError("Microphone access denied.");
+        } else {
+          setError(`Voice Issue: ${event.error}. Feel free to type!`);
+        }
         setIsListening(false);
       };
 
@@ -200,7 +208,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && transcript.trim()) handleVoiceInput(transcript);
                     }}
-                    placeholder="Type or click mic to speak..."
+                    placeholder={`Type "${AFFIRMATIONS[currentPromptIdx]}" here...`}
                     className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
                     autoFocus
                   />
