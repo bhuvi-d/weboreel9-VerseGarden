@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateFlower, FlowerInstance } from '@/lib/flowers';
 import Flower from './Flower';
 import { useAudio } from './AudioEngine';
-import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight, RotateCcw, Volume2, Heart } from 'lucide-react';
+import { Mic, Keyboard, Sparkles, Leaf, Info, ArrowRight, RotateCcw } from 'lucide-react';
 
 const AFFIRMATIONS = [
   "I believe in the future",
@@ -41,29 +41,25 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [flowers, setFlowers] = useState<FlowerInstance[]>([]);
   const [transcript, setTranscript] = useState('');
   const [currentPromptIdx, setCurrentPromptIdx] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [systemStatus, setSystemStatus] = useState<string>('Ready');
   const [micLevel, setMicLevel] = useState(0);
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   const [isBlooming, setIsBlooming] = useState(false);
-  const [usingIllusion, setUsingIllusion] = useState(false);
   
   const { playChime } = useAudio();
   const lastSowRef = useRef<number>(0);
   const recognitionRef = useRef<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const thresholdRef = useRef<number>(15);
 
   const handleSow = useCallback((text: string) => {
     const now = Date.now();
-    if (now - lastSowRef.current < 1500) return; 
+    if (now - lastSowRef.current < 1200) return; 
     lastSowRef.current = now;
 
     const finalWord = text.trim() || AFFIRMATIONS[currentPromptIdx];
     try {
       const newFlower = generateFlower(finalWord);
       setFlowers(prev => [...prev, newFlower]);
-      
       const burstId = Date.now();
       setBursts(prev => [...prev, { id: burstId, x: newFlower.x, y: newFlower.y, color: '#c29470' }]);
       setTimeout(() => setBursts(prev => prev.filter(b => b.id !== burstId)), 2000);
@@ -77,56 +73,59 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     } catch (e) {}
   }, [playChime, currentPromptIdx]);
 
-  const initVoiceEngines = async () => {
-    setSystemStatus("Calibrating...");
-    setError(null);
+  // Clean, Direct Speech Recognition Initialization
+  const startVoiceEngine = async () => {
+    setSystemStatus("Opening Mic...");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Visualizer only (no auto-sowing)
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 64;
       source.connect(analyser);
       audioCtxRef.current = audioCtx;
-
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       const updateVolume = () => {
         if (!audioCtxRef.current) return;
         analyser.getByteFrequencyData(dataArray);
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const level = sum / dataArray.length;
-        setMicLevel(level);
-
-        if (level > thresholdRef.current && Date.now() - lastSowRef.current > 2000) {
-          handleSow(""); 
-        }
+        setMicLevel(sum / dataArray.length);
         requestAnimationFrame(updateVolume);
       };
       updateVolume();
 
+      // Standard Recognition
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
-        recognition.onstart = () => { setSystemStatus("Listening..."); setUsingIllusion(false); };
+
+        recognition.onstart = () => setSystemStatus("Voice Active");
         recognition.onresult = (event: any) => {
           let interim = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) handleSow(event.results[i][0].transcript);
-            else interim += event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              handleSow(event.results[i][0].transcript);
+            } else {
+              interim += event.results[i][0].transcript;
+            }
           }
           setTranscript(interim);
         };
         recognition.onerror = (e: any) => {
-          if (e.error === 'network') { setSystemStatus("Heart-Link Active"); setUsingIllusion(true); }
+          setSystemStatus(`Error: ${e.error}`);
         };
         recognitionRef.current = recognition;
-        try { recognition.start(); } catch (e) {}
+        recognition.start();
       }
-    } catch (e) { setError("Mic permission required."); }
+    } catch (e) {
+      setSystemStatus("Mic Denied");
+    }
   };
 
   useEffect(() => {
@@ -149,10 +148,10 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         <div className="relative z-10 text-center space-y-12 max-w-2xl w-full">
           <div className="space-y-4">
             <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/80 leading-tight">Enter Your Sanctum</h2>
-            <p className="text-foreground/40 font-serif text-lg">Choose your method of planting.</p>
+            <p className="text-foreground/40 font-serif text-lg">Speak or type your seeds into existence.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
-            <motion.button whileHover={{ y: -8 }} whileTap={{ scale: 0.98 }} onClick={() => { setMode('voice'); setPhase('active'); initVoiceEngines(); }} className="p-10 bg-primary/5 border border-primary/20 rounded-3xl flex flex-col items-center gap-6"><div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary"><Mic size={32} /></div><h3 className="text-2xl font-serif italic font-bold text-foreground/70">With Voice</h3></motion.button>
+            <motion.button whileHover={{ y: -8 }} whileTap={{ scale: 0.98 }} onClick={() => { setMode('voice'); setPhase('active'); startVoiceEngine(); }} className="p-10 bg-primary/5 border border-primary/20 rounded-3xl flex flex-col items-center gap-6"><div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary"><Mic size={32} /></div><h3 className="text-2xl font-serif italic font-bold text-foreground/70">With Voice</h3></motion.button>
             <motion.button whileHover={{ y: -8 }} whileTap={{ scale: 0.98 }} onClick={() => { setMode('keyboard'); setPhase('active'); }} className="p-10 bg-foreground/5 border border-foreground/10 rounded-3xl flex flex-col items-center gap-6"><div className="w-20 h-20 rounded-full bg-foreground/10 flex items-center justify-center text-foreground"><Keyboard size={32} /></div><h3 className="text-2xl font-serif italic font-bold text-foreground/70">With Keyboard</h3></motion.button>
           </div>
         </div>
@@ -162,7 +161,6 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative min-h-screen overflow-hidden bg-background">
-      {/* Garden Layer */}
       <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
         <AnimatePresence>
           {flowers.map((f) => <Flower key={f.id} data={f} />)}
@@ -172,16 +170,10 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
 
       <AnimatePresence>
         {isBlooming && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.08 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-primary z-30 pointer-events-none flex items-center justify-center">
-            <motion.div initial={{ scale: 0.5, rotate: -20 }} animate={{ scale: 2.5, rotate: 0 }} exit={{ scale: 3, opacity: 0 }} className="text-primary/20">
-               <Sparkles size={200} />
-            </motion.div>
-          </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.08 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-primary z-30 pointer-events-none flex items-center justify-center" />
         )}
       </AnimatePresence>
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,#fdfcf0_0%,transparent_100%)] z-0 pointer-events-none" />
-      
       <div className="relative z-40 flex flex-col items-center justify-between min-h-screen p-8 pb-32">
         <div className="text-center w-full max-w-4xl space-y-8">
           <div className="text-6xl font-serif font-bold text-foreground/20 italic">{timeLeft}s</div>
@@ -189,10 +181,11 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
             <AnimatePresence mode="wait">
               {currentPromptIdx < AFFIRMATIONS.length ? (
                 <motion.div key={currentPromptIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                  <p className="text-foreground/20 text-[10px] tracking-[0.5em] uppercase font-bold">Say Exactly:</p>
                   <h2 className="text-4xl md:text-6xl font-serif italic text-foreground/70 leading-tight">"{AFFIRMATIONS[currentPromptIdx]}"</h2>
                 </motion.div>
               ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">Sanctuary complete...</motion.div>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-primary/60 text-3xl font-serif italic">Sanctuary thriving...</motion.div>
               )}
             </AnimatePresence>
             
@@ -200,16 +193,12 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
               <div className="flex flex-col items-center gap-12">
                 <div className="relative min-h-[4rem] flex items-center justify-center">
                    <p className="text-primary text-3xl md:text-5xl font-serif italic text-center max-w-2xl">
-                     {transcript || (
-                       AFFIRMATIONS[currentPromptIdx]?.split('').map((char, i) => (
-                         <motion.span key={i} initial={{ opacity: 0.05 }} animate={{ opacity: micLevel > thresholdRef.current ? 1 : 0.05 }} transition={{ duration: 0.2 }}>{char}</motion.span>
-                       ))
-                     )}
+                     {transcript || "..."}
                    </p>
                 </div>
                 <div className="flex items-end gap-1.5 h-12">
                   {[...Array(20)].map((_, i) => (
-                    <motion.div key={i} className="w-1.5 rounded-full transition-all duration-100" style={{ backgroundColor: micLevel > thresholdRef.current ? '#94a187' : 'rgba(148, 161, 135, 0.15)', height: Math.max(4, micLevel * (0.6 + Math.random())) }} animate={{ height: Math.max(4, micLevel * (0.6 + Math.random())) }} />
+                    <motion.div key={i} className="w-1.5 rounded-full" style={{ backgroundColor: micLevel > 15 ? '#94a187' : 'rgba(148, 161, 135, 0.15)', height: Math.max(4, micLevel * 1.5) }} animate={{ height: Math.max(4, micLevel * 1.5) }} />
                   ))}
                 </div>
               </div>
@@ -218,34 +207,30 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
         </div>
 
         <div className="w-full max-w-2xl text-center space-y-12">
-          {mode === 'keyboard' && (
+          {mode === 'keyboard' ? (
             <div className="flex flex-col items-center">
                <input
                  type="text" value={transcript}
                  onChange={(e) => setTranscript(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter' && transcript.trim()) handleSow(transcript); }}
-                 placeholder={`Type your intention...`}
+                 placeholder={`Type intention...`}
                  className="w-full bg-transparent border-b-2 border-primary/20 p-4 text-3xl md:text-5xl font-serif italic text-center text-foreground/80 focus:outline-none focus:border-primary/50 transition-all placeholder:text-foreground/10"
                  autoFocus
                />
                <button onClick={() => handleSow(transcript)} className="mt-10 px-12 py-4 bg-foreground text-background rounded-full font-serif text-lg font-medium shadow-2xl flex items-center gap-3">Sow Seed <ArrowRight size={20}/></button>
             </div>
+          ) : (
+            <div className="flex flex-col items-center gap-6">
+              <button onClick={() => handleSow(transcript || AFFIRMATIONS[currentPromptIdx])} className="px-10 py-4 border-2 border-primary/20 text-primary/60 rounded-full font-serif text-lg hover:bg-primary/5 transition-all">Sow with Current Voice</button>
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
+                <div className="text-[9px] text-primary/30 tracking-[0.5em] uppercase font-bold">{systemStatus}</div>
+              </div>
+            </div>
           )}
-
-          <div className="flex flex-col items-center gap-4">
-             <div className="flex items-center gap-3">
-               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${usingIllusion ? 'bg-red-300' : 'bg-primary/40'}`} />
-               <div className="text-[9px] text-primary/30 tracking-[0.5em] uppercase font-bold text-center">
-                 {usingIllusion ? <span className="flex items-center gap-2"><Heart size={10}/> Heart-Link Active</span> : systemStatus}
-               </div>
-             </div>
-             {mode === 'voice' && (
-                <button onClick={() => handleSow("")} className="text-[10px] text-primary/40 hover:text-primary transition-colors tracking-[0.4em] uppercase font-bold border-b border-primary/10">Skip to Bloom</button>
-             )}
-          </div>
         </div>
       </div>
-      <motion.div className="absolute bottom-0 left-0 h-[2.5px] bg-primary/30" initial={{ width: "0%" }} animate={{ width: `${(timeLeft / 45) * 100}%` }} />
+      <motion.div className="absolute bottom-0 left-0 h-[2.5px] bg-primary/20" initial={{ width: "0%" }} animate={{ width: `${(timeLeft / 45) * 100}%` }} />
     </motion.div>
   );
 }
