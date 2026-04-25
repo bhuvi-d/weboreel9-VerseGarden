@@ -13,14 +13,14 @@ export interface FlowerInstance {
   delay: number;
 }
 
-export const FLOWER_THEME: Record<FlowerType, { color: string; secondary: string; species: FlowerSpecies }> = {
-  hope: { color: '#94a187', secondary: '#e8eedf', species: 'lily' },      // Sage/Linen
-  love: { color: '#c88d67', secondary: '#fdf3e7', species: 'rose' },      // Burnt Sienna/Peach
-  peace: { color: '#8d7b68', secondary: '#f4ede6', species: 'wildflower' }, // Warm Clay/Sand
-  dream: { color: '#9a8da4', secondary: '#f3eef7', species: 'sunflower' },  // Dusty Lavender
-  gratitude: { color: '#a5a58d', secondary: '#f0f0e8', species: 'lavender' }, // Olive Drab
-  courage: { color: '#847e89', secondary: '#efecf0', species: 'tulip' },    // Muted Plum
-  default: { color: '#b5a190', secondary: '#f8f4f1', species: 'daisy' }     // Warm Taupe
+export const FLOWER_THEME: Record<FlowerType, { color: string; secondary: string; glow: string; species: FlowerSpecies }> = {
+  hope:      { color: '#FFD700', secondary: '#FFF176', glow: '#FFD70066', species: 'lily' },        // Bright Gold
+  love:      { color: '#FF3B6B', secondary: '#FFB3C6', glow: '#FF3B6B66', species: 'rose' },        // Hot Pink / Rose Red
+  peace:     { color: '#00BFFF', secondary: '#B3ECFF', glow: '#00BFFF66', species: 'wildflower' },  // Sky Blue
+  dream:     { color: '#BF5FFF', secondary: '#E8B3FF', glow: '#BF5FFF66', species: 'sunflower' },   // Bright Purple
+  gratitude: { color: '#FF7A00', secondary: '#FFD199', glow: '#FF7A0066', species: 'lavender' },    // Vivid Orange
+  courage:   { color: '#FF4500', secondary: '#FFB399', glow: '#FF450066', species: 'tulip' },       // Fire Red-Orange
+  default:   { color: '#39D353', secondary: '#B3F5C4', glow: '#39D35366', species: 'daisy' },       // Bright Green
 };
 
 export function getFlowerType(text: string): FlowerType {
@@ -43,8 +43,8 @@ export function generateFlower(text: string): FlowerInstance {
     species: FLOWER_THEME[type].species,
     x: Math.random() * 80 + 10,
     y: Math.random() * 60 + 20,
-    scale: Math.random() * 0.5 + 1.2,
+    scale: Math.random() * 0.6 + 1.2,
     rotation: Math.random() * 40 - 20,
-    delay: Math.random() * 0.3
+    delay: Math.random() * 0.2
   };
 }

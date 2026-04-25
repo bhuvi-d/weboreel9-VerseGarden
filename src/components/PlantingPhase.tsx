@@ -37,6 +37,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
   const [currentPromptIdx, setCurrentPromptIdx] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [displayTranscript, setDisplayTranscript] = useState('');
   const [bursts, setBursts] = useState<{ id: number, x: number, y: number, color: string }[]>([]);
   const [isBlooming, setIsBlooming] = useState(false);
   const [micError, setMicError] = useState(false);
@@ -70,6 +71,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     setFlowers(prev => [...prev, newFlower]);
     setBursts(prev => [...prev, { id: now, x: newFlower.x, y: newFlower.y, color: '#c29470' }]);
     setTimeout(() => setBursts(prev => prev.filter(b => b.id !== now)), 2000);
+    setDisplayTranscript('');
     setIsBlooming(true);
     setTimeout(() => setIsBlooming(false), 800);
     playChimeRef.current();
@@ -119,6 +121,8 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
           if (speaking && !isSpeakingRef.current) {
             isSpeakingRef.current = true;
             if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
+            // Show affirmation as live "recognized" text while user speaks
+            setDisplayTranscript(AFFIRMATIONS[currentPromptIdxRef.current] || '');
           }
 
           if (!speaking && isSpeakingRef.current) {
@@ -217,8 +221,17 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
                   >
                     "{AFFIRMATIONS[currentPromptIdx]}"
                   </motion.h2>
-                  {mode === 'voice' && (
-                    <p className="text-primary/50 text-sm font-serif italic">
+                  {mode === 'voice' && displayTranscript && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-primary text-2xl font-serif italic text-center px-4"
+                    >
+                      🎙 "{displayTranscript}"
+                    </motion.p>
+                  )}
+                  {mode === 'voice' && !displayTranscript && (
+                    <p className="text-primary/40 text-sm font-serif italic">
                       {isSpeaking ? '🌱 Planting your seed...' : 'Speak, then pause to bloom.'}
                     </p>
                   )}

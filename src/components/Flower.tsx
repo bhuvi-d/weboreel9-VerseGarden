@@ -10,26 +10,27 @@ const SpeciesSVG = ({ species, color, secondary }: { species: string, color: str
       return (
         <g>
           {[0, 60, 120, 180, 240, 300].map((a) => (
-            <path key={a} d="M50 50 C50 10, 80 10, 50 50" fill={color} transform={`rotate(${a} 50 50)`} opacity="0.6" />
+            <path key={a} d="M50 50 C50 10, 80 10, 50 50" fill={color} transform={`rotate(${a} 50 50)`} opacity="0.9" />
           ))}
-          <circle cx="50" cy="50" r="5" fill={secondary} />
+          <circle cx="50" cy="50" r="7" fill={secondary} />
         </g>
       );
     case 'rose':
       return (
         <g>
-          <circle cx="50" cy="50" r="15" fill={color} opacity="0.4" />
-          <circle cx="50" cy="50" r="10" fill={color} opacity="0.6" />
-          <path d="M50 40 Q60 30 70 40 Q60 50 50 40" fill={secondary} opacity="0.8" />
+          <circle cx="50" cy="50" r="22" fill={color} opacity="0.35" />
+          <circle cx="50" cy="50" r="15" fill={color} opacity="0.65" />
+          <circle cx="50" cy="50" r="8"  fill={color} opacity="0.9" />
+          <path d="M50 40 Q62 28 72 40 Q62 52 50 40" fill={secondary} opacity="0.9" />
           <circle cx="50" cy="50" r="5" fill={secondary} />
         </g>
       );
     case 'lavender':
       return (
         <g>
-          <path d="M50 50 L50 20" stroke={color} strokeWidth="2" />
-          {[25, 35, 45].map((y) => (
-            <circle key={y} cx="50" cy={y} r="4" fill={color} opacity="0.7" />
+          <path d="M50 80 L50 30" stroke={color} strokeWidth="2.5" />
+          {[32, 44, 56, 68].map((y) => (
+            <ellipse key={y} cx="50" cy={y} rx="5" ry="7" fill={color} opacity="0.85" />
           ))}
         </g>
       );
@@ -37,43 +38,44 @@ const SpeciesSVG = ({ species, color, secondary }: { species: string, color: str
       return (
         <g>
           {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((a) => (
-            <path key={a} d="M50 50 Q60 20 50 10 Q40 20 50 50" fill={color} transform={`rotate(${a} 50 50)`} />
+            <path key={a} d="M50 50 Q60 18 50 8 Q40 18 50 50" fill={color} transform={`rotate(${a} 50 50)`} opacity="0.95" />
           ))}
-          <circle cx="50" cy="50" r="12" fill="#4a4138" />
+          <circle cx="50" cy="50" r="13" fill={secondary} />
+          <circle cx="50" cy="50" r="7" fill="#4a3020" />
         </g>
       );
     case 'tulip':
       return (
         <g>
-          <path d="M50 50 Q30 20 50 10 Q70 20 50 50" fill={color} />
-          <path d="M50 50 Q40 25 50 15 Q60 25 50 50" fill={secondary} opacity="0.5" />
+          <path d="M50 70 Q30 35 50 10 Q70 35 50 70" fill={color} opacity="0.95" />
+          <path d="M50 65 Q38 38 50 18 Q62 38 50 65" fill={secondary} opacity="0.6" />
+          <path d="M50 70 L50 95" stroke="#4a8c3f" strokeWidth="2.5" />
         </g>
       );
     case 'daisy':
       return (
         <g>
           {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
-            <rect key={a} x="48" y="20" width="4" height="30" rx="2" fill={secondary} transform={`rotate(${a} 50 50)`} />
+            <ellipse key={a} cx="50" cy="28" rx="5" ry="22" fill={color} opacity="0.9" transform={`rotate(${a} 50 50)`} />
           ))}
-          <circle cx="50" cy="50" r="8" fill={color} />
+          <circle cx="50" cy="50" r="10" fill={secondary} />
+          <circle cx="50" cy="50" r="5" fill="#FFD700" />
         </g>
       );
     default: // wildflower
       return (
         <g>
           {[0, 72, 144, 216, 288].map((a) => (
-            <circle key={a} cx="60" cy="50" r="10" fill={color} opacity="0.5" transform={`rotate(${a} 50 50)`} />
+            <ellipse key={a} cx="62" cy="50" rx="12" ry="7" fill={color} opacity="0.85" transform={`rotate(${a} 50 50)`} />
           ))}
-          <circle cx="50" cy="50" r="6" fill={secondary} />
+          <circle cx="50" cy="50" r="8" fill={secondary} />
         </g>
       );
   }
 };
 
 export default function Flower({ data }: { data: FlowerInstance }) {
-  const { color, secondary } = FLOWER_THEME[data.type];
-  
-  // Stabilize random values
+  const { color, secondary, glow } = FLOWER_THEME[data.type];
   const swayDuration = useMemo(() => 4 + Math.random() * 2, []);
 
   return (
@@ -83,38 +85,44 @@ export default function Flower({ data }: { data: FlowerInstance }) {
         scale: data.scale, 
         opacity: 1, 
         y: 0,
-        rotate: [data.rotation - 2, data.rotation + 2, data.rotation - 2]
+        rotate: [data.rotation - 3, data.rotation + 3, data.rotation - 3]
       }}
       transition={{ 
-        scale: { type: 'spring', stiffness: 50, damping: 15, delay: data.delay },
+        scale: { type: 'spring', stiffness: 60, damping: 12, delay: data.delay },
+        opacity: { duration: 0.4, delay: data.delay },
         rotate: { duration: swayDuration, repeat: Infinity, ease: "easeInOut" }
       }}
       className="absolute pointer-events-none"
       style={{ left: `${data.x}%`, top: `${data.y}%` }}
     >
-      <div className="relative flex flex-col items-center group">
-        {/* Soft Sunlight Glow */}
-        <div 
-          className="absolute inset-0 blur-[40px] opacity-20 scale-150" 
-          style={{ backgroundColor: color }}
+      <div className="relative flex flex-col items-center">
+        {/* Vivid radial glow behind flower */}
+        <div
+          className="absolute rounded-full blur-2xl"
+          style={{
+            width: 90, height: 90,
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: glow || color,
+            opacity: 0.55,
+          }}
         />
         
-        {/* The Flower */}
-        <svg width="100" height="100" viewBox="0 0 100 100" className="drop-shadow-sm">
+        {/* The Flower SVG */}
+        <svg width="100" height="100" viewBox="0 0 100 100" style={{ filter: `drop-shadow(0 0 8px ${color})` }}>
           <SpeciesSVG species={data.species} color={color} secondary={secondary} />
         </svg>
         
-        {/* Elegant Label */}
+        {/* Label */}
         <motion.div 
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: data.delay + 0.8 }}
-          className="mt-2 text-center"
+          transition={{ delay: data.delay + 0.7 }}
+          className="mt-1 text-center"
         >
-          <span className="text-[10px] font-serif italic tracking-[0.3em] uppercase text-foreground/30 whitespace-nowrap">
+          <span className="text-[9px] font-serif italic tracking-[0.25em] uppercase whitespace-nowrap" style={{ color }}>
             {data.text}
           </span>
-          <div className="w-8 h-[1px] bg-primary/20 mx-auto mt-1" />
         </motion.div>
       </div>
     </motion.div>
