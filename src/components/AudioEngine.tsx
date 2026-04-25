@@ -24,17 +24,21 @@ export default function AudioEngine({ children }: { children: React.ReactNode })
   const bgMusic = useRef<Howl | null>(null);
   const chime = useRef<Howl | null>(null);
   const reveal = useRef<Howl | null>(null);
+  const synthRef = useRef<any>(null);
 
   useEffect(() => {
-    // Ambient Piano Loop
+    // Ambient Piano Loop - Updated URL to a potentially more stable one
     bgMusic.current = new Howl({
-      src: ['https://cdn.pixabay.com/audio/2022/01/21/audio_167812847c.mp3'],
+      src: ['https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3'], // Generic stable test link
       loop: true,
-      volume: 0.3,
-      autoplay: false, // Don't autoplay to avoid browser blocks
+      volume: 0.2,
+      autoplay: false,
       format: ['mp3'],
       html5: true,
-      onloaderror: (id, err) => console.error("BG Music Load Error:", err),
+      onloaderror: (id, err) => {
+        console.error("BG Music Load Error:", err);
+        // If external audio fails, we stay silent or use synth
+      },
     });
 
     // Chime SFX
@@ -44,33 +48,76 @@ export default function AudioEngine({ children }: { children: React.ReactNode })
       format: ['mp3']
     });
 
-    // Reveal SFX
-    reveal.current = new Howl({
-      src: ['https://cdn.pixabay.com/audio/2021/12/10/audio_f523f2f8a8.mp3'],
-      volume: 0.6,
-      format: ['mp3']
-    });
-
     return () => {
       bgMusic.current?.unload();
       chime.current?.unload();
-      reveal.current?.unload();
+      stopSynth();
     };
   }, []);
 
+  const startSynth = () => {
+    if (synthRef.current) return;
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      masterGain.connect(audioCtx.destination);
+
+      // Create a simple low-pass filtered pad
+      const createOsc = (freq: number) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.02, audioCtx.currentTime);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start();
+        return osc;
+      };
+
+      const oscs = [createOsc(110), createOsc(164.81), createOsc(220)]; // A minor triad
+      masterGain.gain.exponentialRampToValueAtTime(0.1, audioCtx.currentTime + 2);
+      
+      synthRef.current = { audioCtx, masterGain, oscs };
+    } catch (e) {}
+  };
+
+  const stopSynth = () => {
+    if (synthRef.current) {
+      const { masterGain, oscs } = synthRef.current;
+      masterGain.gain.exponentialRampToValueAtTime(0.001, synthRef.current.audioCtx.currentTime + 1);
+      setTimeout(() => {
+        oscs.forEach((o: any) => o.stop());
+        synthRef.current = null;
+      }, 1100);
+    }
+  };
+
   const startAudio = () => {
-    if (!isMuted && bgMusic.current && !bgMusic.current.playing()) {
+    if (isMuted) return;
+    
+    // Try BG Music
+    if (bgMusic.current && bgMusic.current.state() === 'loaded') {
       bgMusic.current.play();
+    } else {
+      // Fallback to Procedural Synth
+      startSynth();
     }
   };
 
   const toggleMute = () => {
     if (isMuted) {
-      bgMusic.current?.play();
-      bgMusic.current?.fade(0, 0.3, 1000);
+      if (bgMusic.current?.state() === 'loaded') {
+        bgMusic.current.play();
+        bgMusic.current.fade(0, 0.2, 1000);
+      } else {
+        startSynth();
+      }
     } else {
-      bgMusic.current?.fade(0.3, 0, 1000);
+      bgMusic.current?.fade(0.2, 0, 1000);
       setTimeout(() => bgMusic.current?.pause(), 1000);
+      stopSynth();
     }
     setIsMuted(!isMuted);
   };
@@ -83,10 +130,7 @@ export default function AudioEngine({ children }: { children: React.ReactNode })
   };
 
   const playReveal = () => {
-    if (!isMuted) {
-      if (reveal.current?.state() === 'loaded') reveal.current.play();
-      else playFallback(660);
-    }
+    if (!isMuted) playFallback(660);
   };
 
   const playFallback = (freq: number) => {
