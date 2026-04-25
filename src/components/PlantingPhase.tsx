@@ -203,7 +203,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
             {mode === 'voice' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-16 flex items-center justify-center">
                  <p className="text-primary text-3xl md:text-4xl font-serif italic text-center drop-shadow-sm">
-                   {transcript || (isListening ? "..." : "")}
+                   {transcript || (systemStatus === 'Listening...' ? "..." : "")}
                  </p>
               </motion.div>
             )}
