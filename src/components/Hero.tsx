@@ -34,7 +34,7 @@ const Petal = ({ delay }: { delay: number }) => {
 };
 
 export default function Hero({ onStart }: { onStart: () => void }) {
-  const { isMuted, toggleMute } = useAudio();
+  const { isMuted, toggleMute, startAudio } = useAudio();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -91,7 +91,10 @@ export default function Hero({ onStart }: { onStart: () => void }) {
           <motion.button
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
-            onClick={onStart}
+            onClick={() => {
+              startAudio();
+              onStart();
+            }}
             className="px-20 py-6 bg-foreground text-background rounded-full font-serif text-xl font-medium shadow-[0_20px_50px_rgba(0,0,0,0.1)] hover:shadow-[0_30px_60px_rgba(0,0,0,0.15)] transition-all duration-500"
           >
             Begin Sowing

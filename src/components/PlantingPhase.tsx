@@ -74,7 +74,7 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
     recognition.onerror = () => setIsListening(false);
     recognition.onend = () => { if (isListening && timeLeft > 0) recognition.start(); };
     recognitionRef.current = recognition;
-    startListening();
+    // startListening(); // Removed: Browser requires user gesture for microphone access
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -88,7 +88,21 @@ export default function PlantingPhase({ onComplete }: { onComplete: (flowers: Fl
 
   useEffect(() => { if (timeLeft === 0) onComplete(flowers); }, [timeLeft, flowers, onComplete]);
 
-  const startListening = () => { try { recognitionRef.current?.start(); setIsListening(true); setError(null); } catch (e) {} };
+  const startListening = () => { 
+    try { 
+      recognitionRef.current?.start(); 
+      setIsListening(true); 
+      setError(null); 
+    } catch (e: any) {
+      console.error("Speech Start Error:", e);
+      if (e.name === 'NotAllowedError') {
+        setError("Microphone access denied. Please enable it in browser settings.");
+      } else {
+        setError("Could not start listening. Please try again.");
+      }
+      setIsListening(false);
+    } 
+  };
   const stopListening = () => { recognitionRef.current?.stop(); setIsListening(false); };
 
   const handleVoiceInput = (text: string) => {
